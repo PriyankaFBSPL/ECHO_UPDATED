@@ -1,0 +1,7 @@
+{
+  "name": "ECHO - AI English Tutor",
+  "description": "A mobile-first, frontend-only English tutoring web application with offline capabilities, powered by Gemini.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
