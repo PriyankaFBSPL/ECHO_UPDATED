@@ -14,7 +14,8 @@ export interface UserProfile {
   avatar: string;
   cefrLevel: CEFRLevel;
   streak: number;
-  lastLogin: number; // timestamp
+  lastLogin: number; // timestamp for session expiry
+  lastLoginDate: string; // YYYY-MM-DD for streak calculation
   wordsLearned: number;
 }
 
@@ -57,4 +58,16 @@ export interface SkillStats {
   vocabulary: number;
   fluency: number;
   pronunciation: number;
+}
+
+export interface DetailedReport {
+  grammarScore: number;
+  vocabularyScore: number;
+  fluencyScore: number;
+  coherenceScore: number;
+  overallCEFR: CEFRLevel;
+  strengths: string[];
+  improvements: string[];
+  actionPlan: string;
+  generatedAt: number;
 }

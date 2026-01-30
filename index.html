@@ -73,6 +73,15 @@
         /* Handle safe areas for iPhone X+ */
         padding-bottom: env(safe-area-inset-bottom);
         overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+        -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+      }
+
+      /* Mobile-specific fixes */
+      @media screen and (max-width: 768px) {
+        /* Prevent iOS zoom on focus by enforcing 16px font size */
+        input, textarea, select {
+          font-size: 16px !important;
+        }
       }
       
       /* Cinematic Glow Animation */

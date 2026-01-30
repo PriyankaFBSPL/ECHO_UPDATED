@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../store';
-import { Send, Mic, Volume2, RotateCcw, StopCircle, ArrowLeft, Radio, Activity, MicOff } from 'lucide-react';
+import { Send, Mic, Volume2, RotateCcw, StopCircle, ArrowLeft, Radio, Activity, MicOff, AlertTriangle } from 'lucide-react';
 import { sendMessageToTutor, startChatSession } from '../services/geminiService';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -19,6 +19,7 @@ const ChatScreen: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isSupported, setIsSupported] = useState(true);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -27,8 +28,21 @@ const ChatScreen: React.FC = () => {
   // Wake Lock Ref
   const wakeLockRef = useRef<any>(null);
 
-  // --- 0. Auto-Clear Chat on Mount ---
+  // --- 0. Support Check & Load Voices ---
   useEffect(() => {
+    // Check for browser support
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        setIsSupported(false);
+    }
+    
+    // Pre-load voices for Mobile Safari
+    const loadVoices = () => {
+        window.speechSynthesis.getVoices();
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    
+    // Auto-clear chat
     clearChat();
   }, [clearChat]);
 
@@ -74,6 +88,14 @@ const ChatScreen: React.FC = () => {
     }
   }, [chatHistory, isProcessing, isListening, isSpeaking]);
 
+  // --- Helper: Unlock Mobile Audio ---
+  const unlockAudio = () => {
+      // Play a silent sound to unlock audio context on iOS/Android
+      const silence = new SpeechSynthesisUtterance(" ");
+      silence.volume = 0;
+      window.speechSynthesis.speak(silence);
+  };
+
   // --- 3. Speech Recognition Setup ---
   const startListening = useCallback(() => {
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
@@ -106,20 +128,17 @@ const ChatScreen: React.FC = () => {
 
     recognition.onerror = (event: any) => {
       console.error("Mic Error", event.error);
-      if (event.error === 'not-allowed') {
-         setSessionActive(false); // Force stop if permission denied
-         alert("Microphone access denied. Please enable permissions.");
-      }
       setIsListening(false);
+      // Don't alert on 'no-speech' or 'aborted' as they are common on mobile
+      if (event.error === 'not-allowed') {
+         setSessionActive(false); 
+         alert("Microphone access denied. Please check your browser settings.");
+      }
     };
 
     recognition.onend = () => {
       setIsListening(false);
-      // Logic: If we stopped listening naturally, we check if we have text to send.
-      // We need to access the LATEST state of inputText here.
-      // However, React state inside closures is stale. We rely on the input value triggering a send
-      // or we handle the 'final' result event.
-      // Hack: We trigger the handleSend logic if we have input.
+      // Logic handled via effect below
     };
 
     try {
@@ -144,7 +163,7 @@ const ChatScreen: React.FC = () => {
     synthesisRef.current = utterance;
     
     utterance.lang = 'en-US';
-    utterance.rate = 1.05; // Slightly faster for conversational flow
+    utterance.rate = 1.0; // Standard speed for teaching clarity
     utterance.pitch = 1.0;
 
     // Load Voice
@@ -171,12 +190,14 @@ const ChatScreen: React.FC = () => {
   
   // Triggered when the user hits "Start Session"
   const handleStartSession = async () => {
+    unlockAudio(); // Critical for Mobile iOS
+    clearChat(); // NEW SESSION: Clear previous history on UI to simulate fresh lesson
     setSessionActive(true);
     
     // New Session: Initialize with AI
     setIsProcessing(true);
     try {
-        const response = await startChatSession(user?.name || 'User', user?.cefrLevel || 'A1');
+        const response = await startChatSession(user?.name || 'Student', user?.cefrLevel || 'A1');
         
         const botMsg = {
             id: Date.now().toString(),
@@ -247,14 +268,11 @@ const ChatScreen: React.FC = () => {
   };
 
   // Effect to detect when recognition ends with text populated, to auto-send
-  // This acts as the bridge between "Speech End" and "Send Message"
   useEffect(() => {
+    // User requested removal of artificial timeout.
+    // We now send immediately when the browser detects end-of-speech (isListening -> false)
     if (!isListening && inputText.trim().length > 0 && sessionActive && !isProcessing && !isSpeaking) {
-        // Debounce slightly to ensure we have the full phrase
-        const timer = setTimeout(() => {
-            handleSend();
-        }, 1000); // 1 second silence = send
-        return () => clearTimeout(timer);
+        handleSend();
     }
   }, [isListening, inputText, sessionActive, isProcessing, isSpeaking]);
 
@@ -273,17 +291,28 @@ const ChatScreen: React.FC = () => {
       {/* Overlay for Initial Start (Mobile Policy Requirement) */}
       {!sessionActive && (
           <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center">
-              <div className="relative mb-8">
-                  <div className="absolute inset-0 bg-primary/30 rounded-full blur-xl animate-pulse"></div>
-                  <button 
-                    onClick={handleStartSession}
-                    className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-[0_0_40px_rgba(59,130,246,0.5)] border-4 border-white/20 transition-transform active:scale-95 hover:scale-105"
-                  >
-                      <Mic size={40} className="text-white" />
-                  </button>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Start Conversation</h2>
-              <p className="text-gray-400 max-w-xs">Tap the microphone to begin the immersive voice session. The screen will stay active.</p>
+              {!isSupported ? (
+                  <div className="bg-red-500/20 p-6 rounded-2xl border border-red-500/50 max-w-sm">
+                      <AlertTriangle size={48} className="mx-auto text-red-500 mb-4" />
+                      <h3 className="text-xl font-bold text-white mb-2">Browser Not Supported</h3>
+                      <p className="text-gray-300">Your browser does not support Speech Recognition. Please use <b>Google Chrome</b> or <b>Safari</b>.</p>
+                      <button onClick={() => setScreen('dashboard')} className="mt-6 px-6 py-2 bg-white/10 rounded-full">Go Back</button>
+                  </div>
+              ) : (
+                <>
+                    <div className="relative mb-8">
+                        <div className="absolute inset-0 bg-primary/30 rounded-full blur-xl animate-pulse"></div>
+                        <button 
+                            onClick={handleStartSession}
+                            className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-[0_0_40px_rgba(59,130,246,0.5)] border-4 border-white/20 transition-transform active:scale-95 hover:scale-105"
+                        >
+                            <Mic size={40} className="text-white" />
+                        </button>
+                    </div>
+                    <h2 className="text-2xl font-bold text-white mb-2">Start Lesson</h2>
+                    <p className="text-gray-400 max-w-xs">Tap to begin your professional tutoring session.</p>
+                </>
+              )}
           </div>
       )}
 
@@ -309,7 +338,7 @@ const ChatScreen: React.FC = () => {
              )}
           </div>
           <div>
-            <h2 className="font-bold text-white tracking-wide text-sm">ECHO</h2>
+            <h2 className="font-bold text-white tracking-wide text-sm">ECHO Tutor</h2>
             <div className="flex items-center gap-1.5">
                 {isListening ? (
                     <span className="text-[9px] text-red-400 uppercase tracking-widest font-bold flex items-center gap-1">
@@ -342,7 +371,7 @@ const ChatScreen: React.FC = () => {
         {chatHistory.length === 0 && !sessionActive && (
              <div className="flex flex-col items-center justify-center h-full opacity-30">
                 <Radio size={48} className="text-white mb-4" />
-                <p className="text-white font-mono text-xs">Awaiting Link Initialization...</p>
+                <p className="text-white font-mono text-xs">Initializing Lesson Environment...</p>
             </div>
         )}
 
@@ -368,15 +397,18 @@ const ChatScreen: React.FC = () => {
                 )}
 
                 {msg.correction && (
-                    <div className="mt-3 pt-3 border-t border-white/10">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="mt-3 pt-3 border-t border-white/10 bg-black/20 -mx-4 -mb-4 px-4 pb-4 rounded-b-2xl">
+                    <div className="flex items-center gap-2 mb-1 mt-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                        <p className="text-xs text-red-400 line-through opacity-70">{msg.correction.original}</p>
+                        <p className="text-xs text-red-400 line-through opacity-70 italic">"{msg.correction.original}"</p>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
                         <p className="text-sm text-green-400 font-bold">{msg.correction.corrected}</p>
                     </div>
+                    {msg.correction.explanation && (
+                         <p className="text-[10px] text-gray-400 ml-3.5 border-l border-gray-600 pl-2">{msg.correction.explanation}</p>
+                    )}
                     </div>
                 )}
                 </div>
@@ -406,19 +438,26 @@ const ChatScreen: React.FC = () => {
       <div className="p-3 bg-black/80 backdrop-blur-xl border-t border-white/10 flex-shrink-0 pb-safe">
         <div className="flex gap-2 items-center">
           <div className="flex-1 relative">
+             {/* text-base prevents iOS zoom */}
              <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder={isListening ? "Listening..." : "Type transmission..."}
-                className={`w-full bg-white/5 border border-white/10 text-white px-4 py-3 rounded-full focus:outline-none focus:border-primary/50 transition-all placeholder-gray-600 text-sm ${isListening ? 'border-red-500/50 bg-red-500/5' : ''}`}
+                placeholder={isListening ? "Listening..." : "Type reply..."}
+                className={`w-full bg-white/5 border border-white/10 text-white px-4 py-3 rounded-full focus:outline-none focus:border-primary/50 transition-all placeholder-gray-600 text-base ${isListening ? 'border-red-500/50 bg-red-500/5' : ''}`}
                 disabled={isProcessing}
             />
           </div>
           
           <button
-            onClick={() => sessionActive ? (isListening ? stopListening() : startListening()) : handleStartSession()}
+            onClick={() => {
+                if(!sessionActive) {
+                    handleStartSession();
+                } else {
+                    isListening ? stopListening() : startListening();
+                }
+            }}
             className={`p-3 rounded-full transition-all duration-300 ${
                 isListening 
                 ? 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse' 

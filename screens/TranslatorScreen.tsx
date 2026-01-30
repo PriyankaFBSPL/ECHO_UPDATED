@@ -59,7 +59,15 @@ const TranslatorScreen: React.FC = () => {
     window.speechSynthesis.speak(utterance);
   };
 
+  const unlockAudio = () => {
+      // Play silence to allow future TTS on iOS
+      const silence = new SpeechSynthesisUtterance(" ");
+      silence.volume = 0;
+      window.speechSynthesis.speak(silence);
+  };
+
   const handleTranslate = async (textOverride?: string) => {
+    unlockAudio(); // Unlock on button click
     const textToProcess = textOverride !== undefined ? textOverride : input;
     
     if (!textToProcess || !textToProcess.trim()) return;
@@ -91,6 +99,8 @@ const TranslatorScreen: React.FC = () => {
   };
 
   const toggleListening = () => {
+    unlockAudio(); // Unlock on mic click
+    
     // If already listening, stop it manually. 
     // The 'onend' event will fire and trigger the translation.
     if (isListening) {
@@ -171,11 +181,12 @@ const TranslatorScreen: React.FC = () => {
       <div className="space-y-2">
         <div className="relative group">
             <div className={`absolute -inset-0.5 bg-gradient-to-r from-primary/30 to-purple-600/30 rounded-2xl blur opacity-30 transition duration-500 ${isListening ? 'opacity-100 animate-pulse' : 'group-hover:opacity-60'}`}></div>
+            {/* Font size 16px to prevent zoom */}
             <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={isListening ? "Listening for Hindi..." : "Tap Mic to speak Hindi..."}
-                className={`relative w-full h-40 p-5 rounded-xl border bg-[#0a0a0a] text-white placeholder-gray-600 focus:outline-none resize-none shadow-inner transition-colors ${
+                className={`relative w-full h-40 p-5 rounded-xl border bg-[#0a0a0a] text-white placeholder-gray-600 focus:outline-none resize-none shadow-inner transition-colors text-base ${
                     isListening ? 'border-red-500/50' : 'border-white/10 focus:border-primary/50'
                 }`}
             />

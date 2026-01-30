@@ -1,11 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
-import { Zap, BookOpen, Trophy, Sun, Moon, ArrowRight, Activity, Loader, LogOut } from 'lucide-react';
+import { Zap, BookOpen, Trophy, Sun, Moon, ArrowRight, Activity, Loader, LogOut, Info } from 'lucide-react';
 import { MessageCircle, Globe } from 'lucide-react';
 import { generateDailyVocab } from '../services/geminiService';
 
 const DashboardScreen: React.FC = () => {
   const { user, isDarkMode, toggleDarkMode, setScreen, vocabulary, addVocab, isVocabLoading, setVocabLoading, logout } = useStore();
+  const [showStreakInfo, setShowStreakInfo] = useState(false);
   
   useEffect(() => {
     const fetchVocab = async () => {
@@ -25,8 +26,8 @@ const DashboardScreen: React.FC = () => {
     fetchVocab();
   }, [vocabulary.length, user, addVocab, setVocabLoading]);
 
-  const StatCard = ({ icon: Icon, label, value, colorClass }: any) => (
-    <div className="bg-glass backdrop-blur-md p-4 rounded-2xl border border-glass-border flex flex-col justify-between h-28 relative overflow-hidden group">
+  const StatCard = ({ icon: Icon, label, value, colorClass, onClick }: any) => (
+    <div onClick={onClick} className={`bg-glass backdrop-blur-md p-4 rounded-2xl border border-glass-border flex flex-col justify-between h-28 relative overflow-hidden group ${onClick ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}>
       <div className={`absolute -right-4 -top-4 w-20 h-20 bg-gradient-to-br ${colorClass} opacity-10 rounded-full blur-xl group-hover:opacity-20 transition-opacity`}></div>
       <div className="flex justify-between items-start z-10">
         <div className={`p-2 rounded-lg bg-white/5`}>
@@ -39,7 +40,26 @@ const DashboardScreen: React.FC = () => {
   );
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar p-6 space-y-8 pb-32">
+    <div className="h-full overflow-y-auto no-scrollbar p-6 space-y-8 pb-32 relative">
+      
+      {/* Streak Modal */}
+      {showStreakInfo && (
+          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" onClick={() => setShowStreakInfo(false)}>
+              <div className="bg-[#121212] border border-orange-500/30 p-6 rounded-3xl max-w-sm text-center shadow-[0_0_50px_rgba(249,115,22,0.2)]">
+                  <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-orange-500/20">
+                      <Zap size={32} className="text-orange-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">Daily Streak</h3>
+                  <p className="text-gray-400 text-sm mb-4 leading-relaxed">
+                      Your streak represents the number of <span className="text-orange-400 font-bold">consecutive days</span> you have practiced. 
+                      <br/><br/>
+                      Consistency is the key to mastering English. Don't break the chain!
+                  </p>
+                  <button className="px-6 py-2 bg-white/10 rounded-full text-white text-sm font-bold hover:bg-white/20">Got it</button>
+              </div>
+          </div>
+      )}
+
       {/* Cinematic Header */}
       <div className="flex justify-between items-end">
         <div>
@@ -48,7 +68,7 @@ const DashboardScreen: React.FC = () => {
             System Online
           </p>
           <h1 className="text-3xl font-bold text-white leading-tight">
-            Welcome back, <br />
+            Welcome, <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-300">{user?.name}</span>
           </h1>
         </div>
@@ -71,7 +91,13 @@ const DashboardScreen: React.FC = () => {
 
       {/* Stats Grid - Glassmorphism */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard icon={Zap} label="Streak" value={user?.streak} colorClass="from-orange-500 to-red-500" />
+        <StatCard 
+            icon={Zap} 
+            label="Streak" 
+            value={user?.streak} 
+            colorClass="from-orange-500 to-red-500" 
+            onClick={() => setShowStreakInfo(true)}
+        />
         <StatCard icon={Trophy} label="Level" value={user?.cefrLevel} colorClass="from-purple-500 to-pink-500" />
         <StatCard icon={BookOpen} label="Vocab" value={vocabulary.filter(w => w.status === 'mastered').length} colorClass="from-green-500 to-teal-500" />
       </div>
@@ -88,7 +114,7 @@ const DashboardScreen: React.FC = () => {
                         <>
                          <Loader size={10} className="animate-spin" /> ACQUIRING DATA
                         </>
-                    ) : 'Daily Intel'}
+                    ) : 'Daily Lesson'}
                 </span>
                 <Activity size={20} className={`text-blue-400 opacity-80 ${isVocabLoading ? 'animate-pulse' : ''}`} />
             </div>
@@ -100,7 +126,7 @@ const DashboardScreen: React.FC = () => {
                 </p>
                 
                 <div className="flex items-center text-blue-400 text-sm font-semibold group-hover:translate-x-1 transition-transform">
-                    {isVocabLoading ? "Processing..." : "Initialize Learning"} 
+                    {isVocabLoading ? "Processing..." : "Start Lesson"} 
                     {!isVocabLoading && <ArrowRight size={16} className="ml-2" />}
                 </div>
             </div>
@@ -121,7 +147,7 @@ const DashboardScreen: React.FC = () => {
             </div>
             <div className="text-left">
               <p className="font-bold text-gray-200">Conversation Protocol</p>
-              <p className="text-xs text-gray-500 mt-0.5">Interact with ECHO AI</p>
+              <p className="text-xs text-gray-500 mt-0.5">Live Tutor Session</p>
             </div>
           </div>
           <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10">

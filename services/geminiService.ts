@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { ChatMessage, VocabWord, CEFRLevel } from '../types';
+import { ChatMessage, VocabWord, CEFRLevel, DetailedReport } from '../types';
 
 // Defensive check to prevent crash if process is undefined in browser
 const API_KEY = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || ''; 
@@ -7,47 +7,62 @@ const API_KEY = (typeof process !== 'undefined' && process.env && process.env.AP
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const ECHO_SYSTEM_PROMPT = `
-You are ECHO, an advanced AI English tutor designed for immersive voice conversation.
-Your goal is to simulate a natural, fluid conversation with the user.
+You are ECHO, a professional, CEFR-certified English Private Tutor.
+Your goal is not just to chat, but to ACTIVELY TEACH through conversation.
 
-CRITICAL INSTRUCTIONS:
-1. **Be Concise**: Keep responses short (1-3 sentences) to allow for a back-and-forth dialogue. Do not monologue.
-2. **Be Natural**: Use fillers (like "I see," "That's interesting," "Hmm") occasionally to sound human.
-3. **Correction Strategy**: Do NOT correct every single mistake. Only correct major grammar errors that impede understanding, and do so gently at the end of your response.
-4. **Engagement**: Always end your turn with a relevant follow-up question to keep the user speaking.
-5. **Adaptability**: Adjust your vocabulary complexity based on the user's CEFR level.
+YOUR PERSONA:
+- You are warm, professional, and patient.
+- You treat every interaction as a "mini-lesson".
+- You adapt your vocabulary strictly to the user's CEFR level.
+
+CRITICAL INSTRUCTION PROTOCOL:
+1. **Response Structure**:
+   - First, reply naturally to the conversation context (1-2 sentences).
+   - Second, if the user made a grammar/vocabulary error, provide a *gentle* correction in the JSON 'correction' field.
+   - Third, ask a relevant follow-up question to drive the student to speak more.
+
+2. **Correction Strategy**:
+   - **Do not** nag about every tiny mistake.
+   - **Do** correct verb tense errors, preposition mistakes, and unnatural phrasing.
+   - **Do** suggested "Better phrasing" for advanced users.
+
+3. **Speaking Style**:
+   - Avoid robot-like introductions. Be conversational.
+   - Use questions that require more than a "Yes/No" answer.
+
+4. **Formatting**:
+   - Keep the main 'response' text clean (no markdown bolding/headings) so it can be spoken by TTS smoothly.
 `;
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-      response: { type: Type.STRING, description: "The natural conversational response from ECHO." },
+      response: { type: Type.STRING, description: "The conversational reply to be spoken to the student." },
       correction: {
           type: Type.OBJECT,
-          description: "Optional correction if the user made a mistake.",
+          description: "Structured correction data if the student made a mistake.",
           nullable: true,
           properties: {
-              original: { type: Type.STRING },
-              corrected: { type: Type.STRING },
-              explanation: { type: Type.STRING }
+              original: { type: Type.STRING, description: "The user's specific text that was incorrect." },
+              corrected: { type: Type.STRING, description: "The grammatically correct version." },
+              explanation: { type: Type.STRING, description: "A very brief explanation of the rule (e.g., 'Use past tense here')." }
           }
       }
   }
 };
 
-const STARTER_TOPICS = [
-    "travel and dream destinations",
-    "the impact of technology on daily life",
-    "memorable childhood experiences",
-    "food, cooking, and favorite cuisines",
-    "movies, books, or storytelling",
-    "fitness, health, and well-being",
-    "music and how it affects mood",
-    "future goals and aspirations"
+const LESSON_TOPICS = [
+    "discussing future career aspirations",
+    "debating the pros and cons of city life vs country life",
+    "describing a memorable travel experience",
+    "explaining a favorite traditional dish",
+    "analyzing a recent movie or book plot",
+    "discussing healthy lifestyle habits",
+    "environmental changes and personal impact"
 ];
 
 export const startChatSession = async (userName: string, level: string): Promise<{ text: string }> => {
-  if (!API_KEY) return { text: `Hello ${userName}! I'm ECHO. Ready to practice?` };
+  if (!API_KEY) return { text: `Hello ${userName}. I am your English tutor. Let's begin our lesson.` };
 
   try {
     const chat = ai.chats.create({
@@ -59,18 +74,18 @@ export const startChatSession = async (userName: string, level: string): Promise
       }
     });
 
-    const randomTopic = STARTER_TOPICS[Math.floor(Math.random() * STARTER_TOPICS.length)];
+    const randomTopic = LESSON_TOPICS[Math.floor(Math.random() * LESSON_TOPICS.length)];
 
     const result = await chat.sendMessage({ 
-      message: `[SYSTEM_INIT] The user is ${userName}, CEFR Level ${level}. 
-      Initiate the conversation warmly by name. 
-      Instead of a generic greeting, jump straight into a casual conversation about: "${randomTopic}".
-      Ask an open-ended question to get them talking.` 
+      message: `[SYSTEM_INIT] Start a new teaching session with student: ${userName} (Level: ${level}).
+      Skip pleasantries like "How are you?". 
+      Jump immediately into a lesson context about: "${randomTopic}".
+      Ask a specific question to gauge their level.` 
     });
 
     let responseText = result.text?.replace(/```json\n?|```/g, '').trim() || '{}';
     const json = JSON.parse(responseText);
-    return { text: json.response || "Hello! Ready to start?" };
+    return { text: json.response || "Welcome to your English lesson. Shall we begin?" };
 
   } catch (error) {
     console.error("Start Session Error:", error);
@@ -139,8 +154,8 @@ export const translateText = async (text: string): Promise<{ simple: string; enh
       contents: `Translate the following text (which is likely Hindi or English) to English. 
       Provide two versions: 
       1. Simple English (beginner friendly).
-      2. Enhanced English (using more advanced vocabulary).
-      3. An example of how to use the enhanced version in an Indian context.
+      2. Enhanced English (professional/native level).
+      3. An example of how to use the enhanced version in a professional or social context.
       
       Input Text: "${text}"`,
       config: {
@@ -171,9 +186,12 @@ export const generateDailyVocab = async (level: CEFRLevel): Promise<VocabWord[]>
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Generate 3 distinct, advanced English vocabulary words that are sophisticated and not in common daily use (thesaurus-level/GRE level). 
-            Focus on words that enhance articulation and are considered 'rare' or 'literary' but useful for high-level expression.
-            Include an example specifically relevant to an Indian context (e.g., festivals, food, daily life in India).`,
+            contents: `Generate 3 distinct English vocabulary words suitable for a ${level} level student.
+            1. Word 1: Slightly challenging.
+            2. Word 2: Professional/Academic.
+            3. Word 3: Idiomatic or Expressive.
+            
+            Include an example specifically relevant to an Indian context.`,
             config: {
                 responseMimeType: 'application/json',
                 responseSchema: {
@@ -206,5 +224,55 @@ export const generateDailyVocab = async (level: CEFRLevel): Promise<VocabWord[]>
     } catch (error) {
         console.error("Vocab gen error", error);
         return [];
+    }
+};
+
+export const evaluateProgress = async (history: ChatMessage[]): Promise<DetailedReport> => {
+    if (!API_KEY) throw new Error("API Key missing");
+    
+    const conversationText = history
+        .map(msg => `${msg.role.toUpperCase()}: ${msg.text}`)
+        .join('\n');
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview', // Stronger model for analysis
+            contents: `You are a Senior CEFR Examiner. Analyze the following conversation transcript from an English student.
+            
+            Transcript:
+            ${conversationText.substring(0, 10000)} // Limit context if needed
+            
+            Task:
+            1. Evaluate Grammar, Vocabulary, Fluency, and Coherence (0-100).
+            2. Determine their overall CEFR Level (A1, A2, B1, B2, C1, or C2).
+            3. Identify 3 major strengths.
+            4. Identify 3 specific areas for improvement (improvements).
+            5. Create a short actionable plan (2-3 sentences).
+            `,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        grammarScore: { type: Type.INTEGER },
+                        vocabularyScore: { type: Type.INTEGER },
+                        fluencyScore: { type: Type.INTEGER },
+                        coherenceScore: { type: Type.INTEGER },
+                        overallCEFR: { type: Type.STRING, enum: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] },
+                        strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        actionPlan: { type: Type.STRING }
+                    }
+                }
+            }
+        });
+
+        let cleanedText = response.text?.replace(/```json\n?|```/g, '').trim() || '{}';
+        const data = JSON.parse(cleanedText);
+        return { ...data, generatedAt: Date.now() };
+
+    } catch (error) {
+        console.error("Evaluation Error", error);
+        throw error;
     }
 }
