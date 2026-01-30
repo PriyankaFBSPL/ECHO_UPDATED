@@ -1,19 +1,29 @@
 import React, { useEffect } from 'react';
 import { useStore } from '../store';
-import { Zap, BookOpen, Trophy, Sun, Moon, ArrowRight, Activity } from 'lucide-react';
+import { Zap, BookOpen, Trophy, Sun, Moon, ArrowRight, Activity, Loader } from 'lucide-react';
 import { generateDailyVocab } from '../services/geminiService';
 import { MessageCircle, Globe } from 'lucide-react';
 
 const DashboardScreen: React.FC = () => {
-  const { user, isDarkMode, toggleDarkMode, setScreen, vocabulary, addVocab } = useStore();
+  const { user, isDarkMode, toggleDarkMode, setScreen, vocabulary, addVocab, isVocabLoading, setVocabLoading } = useStore();
   
   useEffect(() => {
-    if (vocabulary.length === 0 && user) {
-        generateDailyVocab(user.cefrLevel).then(words => {
-            if(words.length > 0) addVocab(words);
-        });
-    }
-  }, [vocabulary.length, user]);
+    const fetchVocab = async () => {
+        if (vocabulary.length === 0 && user && !isVocabLoading) {
+            setVocabLoading(true);
+            try {
+                const words = await generateDailyVocab(user.cefrLevel);
+                if(words.length > 0) addVocab(words);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setVocabLoading(false);
+            }
+        }
+    };
+
+    fetchVocab();
+  }, [vocabulary.length, user, addVocab, setVocabLoading]);
 
   const StatCard = ({ icon: Icon, label, value, colorClass }: any) => (
     <div className="bg-glass backdrop-blur-md p-4 rounded-2xl border border-glass-border flex flex-col justify-between h-28 relative overflow-hidden group">
@@ -62,22 +72,31 @@ const DashboardScreen: React.FC = () => {
       </div>
 
       {/* Hero Card - Daily Vocab */}
-      <div className="relative w-full rounded-3xl overflow-hidden border border-white/10 group cursor-pointer shadow-glow-sm" onClick={() => setScreen('vocabulary')}>
+      <div className="relative w-full rounded-3xl overflow-hidden border border-white/10 group cursor-pointer shadow-glow-sm transition-all" onClick={() => setScreen('vocabulary')}>
         <div className="absolute inset-0 bg-gradient-to-r from-blue-900/80 to-black/80 z-0"></div>
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 z-0"></div>
         
         <div className="relative z-10 p-6 flex flex-col justify-between min-h-[160px]">
             <div className="flex justify-between items-start">
-                <span className="px-3 py-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-bold uppercase tracking-widest rounded-full">Daily Intel</span>
-                <Activity size={20} className="text-blue-400 opacity-80" />
+                <span className="px-3 py-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] font-bold uppercase tracking-widest rounded-full flex items-center gap-2">
+                    {isVocabLoading ? (
+                        <>
+                         <Loader size={10} className="animate-spin" /> ACQUIRING DATA
+                        </>
+                    ) : 'Daily Intel'}
+                </span>
+                <Activity size={20} className={`text-blue-400 opacity-80 ${isVocabLoading ? 'animate-pulse' : ''}`} />
             </div>
             
             <div>
                 <h2 className="text-xl font-bold text-white mb-2">Vocabulary Update</h2>
-                <p className="text-gray-400 text-sm mb-4">3 new data points available for acquisition.</p>
+                <p className="text-gray-400 text-sm mb-4">
+                    {isVocabLoading ? "Establishing secure uplink to database..." : "3 new data points available for acquisition."}
+                </p>
                 
                 <div className="flex items-center text-blue-400 text-sm font-semibold group-hover:translate-x-1 transition-transform">
-                    Initialize Learning <ArrowRight size={16} className="ml-2" />
+                    {isVocabLoading ? "Processing..." : "Initialize Learning"} 
+                    {!isVocabLoading && <ArrowRight size={16} className="ml-2" />}
                 </div>
             </div>
         </div>

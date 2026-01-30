@@ -1,18 +1,21 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ChatMessage, VocabWord, CEFRLevel } from '../types';
 
-const API_KEY = process.env.API_KEY || ''; 
+// Defensive check to prevent crash if process is undefined in browser
+const API_KEY = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || ''; 
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const ECHO_SYSTEM_PROMPT = `
-You are ECHO, a friendly, encouraging, and highly articulate English tutor. 
-Your goal is to help the user practice English conversation.
-- Keep responses concise (under 50 words) unless explaining a concept.
-- Correct grammar mistakes gently.
-- Use sophisticated vocabulary where appropriate to challenge the user, but explain if necessary.
-- If the user makes a mistake, provide the correction in a structured JSON format inside the response text if possible, or just plain text if using the chat interface.
-- Adapt to the user's CEFR level.
+You are ECHO, an advanced AI English tutor designed for immersive voice conversation.
+Your goal is to simulate a natural, fluid conversation with the user.
+
+CRITICAL INSTRUCTIONS:
+1. **Be Concise**: Keep responses short (1-3 sentences) to allow for a back-and-forth dialogue. Do not monologue.
+2. **Be Natural**: Use fillers (like "I see," "That's interesting," "Hmm") occasionally to sound human.
+3. **Correction Strategy**: Do NOT correct every single mistake. Only correct major grammar errors that impede understanding, and do so gently at the end of your response.
+4. **Engagement**: Always end your turn with a relevant follow-up question to keep the user speaking.
+5. **Adaptability**: Adjust your vocabulary complexity based on the user's CEFR level.
 `;
 
 const RESPONSE_SCHEMA = {
@@ -32,6 +35,17 @@ const RESPONSE_SCHEMA = {
   }
 };
 
+const STARTER_TOPICS = [
+    "travel and dream destinations",
+    "the impact of technology on daily life",
+    "memorable childhood experiences",
+    "food, cooking, and favorite cuisines",
+    "movies, books, or storytelling",
+    "fitness, health, and well-being",
+    "music and how it affects mood",
+    "future goals and aspirations"
+];
+
 export const startChatSession = async (userName: string, level: string): Promise<{ text: string }> => {
   if (!API_KEY) return { text: `Hello ${userName}! I'm ECHO. Ready to practice?` };
 
@@ -45,8 +59,13 @@ export const startChatSession = async (userName: string, level: string): Promise
       }
     });
 
+    const randomTopic = STARTER_TOPICS[Math.floor(Math.random() * STARTER_TOPICS.length)];
+
     const result = await chat.sendMessage({ 
-      message: `[SYSTEM_INIT] The user is ${userName}, CEFR Level ${level}. Initiate the conversation warmly by name, and ask an engaging question to start the practice session.` 
+      message: `[SYSTEM_INIT] The user is ${userName}, CEFR Level ${level}. 
+      Initiate the conversation warmly by name. 
+      Instead of a generic greeting, jump straight into a casual conversation about: "${randomTopic}".
+      Ask an open-ended question to get them talking.` 
     });
 
     let responseText = result.text?.replace(/```json\n?|```/g, '').trim() || '{}';

@@ -8,6 +8,8 @@ interface AppState {
   setScreen: (screen: ScreenName) => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+  isVocabLoading: boolean;
+  setVocabLoading: (loading: boolean) => void;
   
   // User State
   user: UserProfile | null;
@@ -44,6 +46,9 @@ export const useStore = create<AppState>()(
       // Defaulting to TRUE for cinematic look
       isDarkMode: true,
       toggleDarkMode: () => set((state) => ({ isDarkMode: !state.isDarkMode })),
+      
+      isVocabLoading: false,
+      setVocabLoading: (loading) => set({ isVocabLoading: loading }),
 
       user: null,
       login: (name, avatar) => set({
