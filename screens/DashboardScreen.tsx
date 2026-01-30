@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { useStore } from '../store';
-import { Zap, BookOpen, Trophy, Sun, Moon, ArrowRight, Activity, Loader } from 'lucide-react';
-import { generateDailyVocab } from '../services/geminiService';
+import { Zap, BookOpen, Trophy, Sun, Moon, ArrowRight, Activity, Loader, LogOut } from 'lucide-react';
 import { MessageCircle, Globe } from 'lucide-react';
+import { generateDailyVocab } from '../services/geminiService';
 
 const DashboardScreen: React.FC = () => {
-  const { user, isDarkMode, toggleDarkMode, setScreen, vocabulary, addVocab, isVocabLoading, setVocabLoading } = useStore();
+  const { user, isDarkMode, toggleDarkMode, setScreen, vocabulary, addVocab, isVocabLoading, setVocabLoading, logout } = useStore();
   
   useEffect(() => {
     const fetchVocab = async () => {
@@ -57,6 +57,11 @@ const DashboardScreen: React.FC = () => {
             <button onClick={toggleDarkMode} className="p-3 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
                 {isDarkMode ? <Sun size={18} className="text-yellow-500" /> : <Moon size={18} className="text-gray-400" />}
             </button>
+            
+            <button onClick={logout} className="p-3 rounded-full bg-white/5 border border-white/10 hover:bg-red-500/10 hover:text-red-400 text-gray-400 transition-colors" title="Log Out">
+                <LogOut size={18} />
+            </button>
+
             <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-black rounded-full border border-white/10 flex items-center justify-center text-2xl shadow-lg relative">
                 {user?.avatar}
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-black rounded-full"></div>
